@@ -17,80 +17,57 @@ function App() {
       setError("");
       setWeather(null);
       
-      // Using weatherapi.com (free, no key needed for basic)
-      const response = await axios.get(
-        `https://api.weatherapi.com/v1/current.json?key=demo&q=${encodeURIComponent(city.trim())}&aqi=no`
+      // Using Open-Meteo API (free, no key needed)
+      const geoResponse = await axios.get(
+        `https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(city.trim())}&count=1`
       );
       
-      const data = response.data;
+      if (!geoResponse.data.results?.[0]) {
+        setError("City not found 😢");
+        return;
+      }
+      
+      const location = geoResponse.data.results[0];
+      const weatherResponse = await axios.get(
+        `https://api.open-meteo.com/v1/forecast?latitude=${location.latitude}&longitude=${location.longitude}&current=temperature_2m,relative_humidity_2m,wind_speed_10m,weather_code`
+      );
+      
+      const current = weatherResponse.data.current;
+      const weatherCodes = {
+        0: "Clear sky", 1: "Mainly clear", 2: "Partly cloudy", 3: "Overcast",
+        45: "Foggy", 48: "Foggy", 51: "Light drizzle", 53: "Drizzle", 55: "Heavy drizzle",
+        61: "Light rain", 63: "Rain", 65: "Heavy rain", 71: "Light snow", 73: "Snow", 
+        75: "Heavy snow", 80: "Light showers", 81: "Showers", 82: "Heavy showers", 
+        95: "Thunderstorm"
+      };
       
       setWeather({
-        name: data.location.name,
-        sys: { country: data.location.country },
+        name: location.name,
+        sys: { country: location.country || "" },
         main: {
-          temp: Math.round(data.current.temp_c),
-          humidity: data.current.humidity
+          temp: Math.round(current.temperature_2m),
+          humidity: current.relative_humidity_2m
         },
         weather: [{
-          description: data.current.condition.text
+          description: weatherCodes[current.weather_code] || "Unknown"
         }],
         wind: {
-          speed: (data.current.wind_kph / 3.6).toFixed(1)
+          speed: current.wind_speed_10m
         }
       });
     } catch (err) {
-      console.error("Error:", err.response?.data || err.message);
-      
-      // Try alternative free API
-      try {
-        const geoResponse = await axios.get(
-          `https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(city.trim())}&count=1`
-        );
-        
-        if (!geoResponse.data.results?.[0]) {
-          setError("City not found 😢");
-          return;
-        }
-        
-        const location = geoResponse.data.results[0];
-        const weatherResponse = await axios.get(
-          `https://api.open-meteo.com/v1/forecast?latitude=${location.latitude}&longitude=${location.longitude}&current=temperature_2m,relative_humidity_2m,wind_speed_10m,weather_code`
-        );
-        
-        const current = weatherResponse.data.current;
-        const weatherCodes = {
-          0: "Clear", 1: "Mainly clear", 2: "Partly cloudy", 3: "Overcast",
-          45: "Foggy", 51: "Drizzle", 61: "Rain", 71: "Snow", 95: "Thunderstorm"
-        };
-        
-        setWeather({
-          name: location.name,
-          sys: { country: location.country || "" },
-          main: {
-            temp: Math.round(current.temperature_2m),
-            humidity: current.relative_humidity_2m
-          },
-          weather: [{
-            description: weatherCodes[current.weather_code] || "Unknown"
-          }],
-          wind: {
-            speed: current.wind_speed_10m
-          }
-        });
-      } catch (err2) {
-        console.error("Backup API Error:", err2);
-        setError("City not found 😢");
-      }
+      console.error("Error:", err);
+      setError("City not found 😢");
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <div className="container">
+    <div className="app-container">
       <h1>🌤 React Weather App</h1>
 
-      <form onSubmit={getWeather}>
+      <form onSubmit={getWeather} className="search-form">
         <input
           type="text"
           placeholder="Enter city name"
@@ -106,12 +83,35 @@ function App() {
       {error && <p className="error">{error}</p>}
 
       {weather && (
-        <div className="card">
-          <h2>{weather.name}, {weather.sys.country}</h2>
-          <h3>{weather.main.temp}°C</h3>
-          <p>{weather.weather[0].description}</p>
-          <p>Humidity: {weather.main.humidity}%</p>
-          <p>Wind Speed: {weather.wind.speed} m/s</p>
+        <div className="weather-card">
+          <div className="cloud-container">
+            <div className="cloud front">
+              <span className="left-front"></span>
+              <span className="right-front"></span>
+            </div>
+            <span className="sun sunshine"></span>
+            <span className="sun"></span>
+            <div className="cloud back">
+              <span className="left-back"></span>
+              <span className="right-back"></span>
+            </div>
+          </div>
+          
+          <div className="card-header">
+            <span>{weather.name}, {weather.sys.country}</span>
+            <span>{weather.weather[0].description}</span>
+          </div>
+          
+          <div className="weather-details">
+            <span>💧 {weather.main.humidity}%</span>
+            <span>💨 {weather.wind.speed} m/s</span>
+          </div>
+          
+          <span className="temp">{weather.main.temp}°</span>
+          
+          <div className="temp-scale">
+            <span>Celsius</span>
+          </div>
         </div>
       )}
     </div>
